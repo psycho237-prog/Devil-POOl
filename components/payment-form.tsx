@@ -1,257 +1,310 @@
-"use client"
+ "use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
-import { Phone, User, Mail, CreditCard } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent } from "@/components/ui/card"
+import { Loader2, CreditCard } from "lucide-react"
 
 interface PaymentFormProps {
   passName: string
   passPrice: string
-  passImage: string
 }
 
-export default function PaymentForm({ passName, passPrice, passImage }: PaymentFormProps) {
+export default function PaymentForm({ passName, passPrice }: PaymentFormProps) {
   const router = useRouter()
-  const [selectedOperator, setSelectedOperator] = useState<"orange" | "mtn" | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
   })
+  const [selectedOperator, setSelectedOperator] = useState<"orange" | "mtn" | null>(null)
+  const [errors, setErrors] = useState({
+    fullName: "",
+    phone: "",
+    operator: "",
+  })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Validate form fields
+  const validateForm = (): boolean => {
+    const newErrors = {
+      fullName: "",
+      phone: "",
+      operator: "",
+    }
+
+    // Validate full name
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = "Le nom complet est requis"
+    } else if (formData.fullName.trim().length < 3) {
+      newErrors.fullName = "Le nom doit contenir au moins 3 caractères"
+    }
+
+    // Validate phone number (Cameroon format)
+    const phoneRegex = /^(\+237|237)?[26]\d{8}$/
+    if (!formData.phone.trim()) {
+      newErrors.phone = "Le numéro de téléphone est requis"
+    } else if (!phoneRegex.test(formData.phone.replace(/\s/g, ""))) {
+      newErrors.phone = "Numéro invalide (ex: 6XXXXXXXX ou 237XXXXXXXXX)"
+    }
+
+    // Validate operator selection
+    if (!selectedOperator) {
+      newErrors.operator = "Veuillez sélectionner un opérateur"
+    }
+
+    setErrors(newErrors)
+    return !newErrors.fullName && !newErrors.phone && !newErrors.operator
+  }
+
+  // Format phone number for storage
+  const formatPhoneNumber = (phone: string): string => {
+    const cleaned = phone.replace(/\s/g, "")
+    if (cleaned.startsWith("+237")) {
+      return cleaned
+    } else if (cleaned.startsWith("237")) {
+      return "+" + cleaned
+    } else {
+      return "+237" + cleaned
+    }
+  }
+
+  // Generate unique booking ID
+  const generateBookingId = (): string => {
+    const timestamp = Date.now().toString(36).toUpperCase()
+    const random = Math.random().toString(36).substr(2, 5).toUpperCase()
+    return `2025-${timestamp}-${random}`
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validate form
+    if (!validateForm()) {
+      return
+    }
+
     setIsLoading(true)
-    // Simulate payment processing
-    setTimeout(() => {
-      console.log("Payment data:", { ...formData, operator: selectedOperator, pass: passName })
-      // Here you would handle the actual payment and backend interaction
-      // Redirect to confirmation page
-      router.push("/confirmation")
-    }, 3000)
+
+    try {
+      // Generate unique booking ID
+      const bookingId = generateBookingId()
+      const formattedPhone = formatPhoneNumber(formData.phone)
+
+      // Prepare booking data
+      const bookingData = {
+        id: bookingId,
+        fullName: formData.fullName.trim(),
+        phone: formattedPhone,
+        passType: passName,
+        price: passPrice,
+        paymentOperator: selectedOperator,
+        bookingDate: new Date().toISOString(),
+        eventDate: "30 Novembre 2025",
+        eventLocation: "Pool Paradise, Douala",
+        eventTime: "20h00 - 04h00",
+      }
+
+      // 🔴 BACKEND INTEGRATION POINT:
+      // Replace this section with actual API call to your backend
+      // Example:
+      /*
+      const response = await fetch("/api/bookings/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: bookingData.fullName,
+          phone: bookingData.phone,
+          passType: bookingData.passType,
+          price: bookingData.price,
+          paymentOperator: bookingData.paymentOperator,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Payment failed")
+      }
+
+      const result = await response.json()
+      const bookingId = result.bookingId
+      */
+
+      // Simulate API call delay (remove this in production)
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      // Store booking data in sessionStorage for confirmation page
+      // In production, this data should come from your database via the confirmation page
+      sessionStorage.setItem(`booking_${bookingId}`, JSON.stringify(bookingData))
+
+      // Log payment data for debugging (remove in production)
+      console.log("Payment data:", {
+        ...bookingData,
+        operator: selectedOperator,
+      })
+
+      // Redirect to confirmation page with booking ID
+      router.push(`/confirmation?bookingId=${bookingId}&name=${encodeURIComponent(bookingData.fullName)}&phone=${encodeURIComponent(bookingData.phone)}&passType=${encodeURIComponent(bookingData.passType)}&price=${encodeURIComponent(bookingData.price)}`)
+
+    } catch (error) {
+      console.error("Payment error:", error)
+      alert("Une erreur est survenue lors du paiement. Veuillez réessayer.")
+      setIsLoading(false)
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+    
+    // Clear error when user starts typing
+    if (errors[name as keyof typeof errors]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }))
+    }
+  }
+
+  const handleOperatorSelect = (operator: "orange" | "mtn") => {
+    setSelectedOperator(operator)
+    if (errors.operator) {
+      setErrors((prev) => ({ ...prev, operator: "" }))
+    }
   }
 
   return (
-    <div className="min-h-screen py-20 px-4" style={{ backgroundColor: "var(--space-dark)" }}>
-      <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Side - Pass Summary */}
-          <div className="order-2 lg:order-1 animate-slide-in-left">
-            <div className="sticky top-24">
-              <div className="rounded-3xl overflow-hidden elegant-border bg-gradient-to-b from-[var(--cosmic-blue)]/90 to-[var(--space-dark)]/70 backdrop-blur-sm p-8">
-                <h2 
-                  className="text-3xl font-bold mb-4 gold-text text-center"
-                  style={{ fontFamily: "var(--font-playfair), serif" }}
-                >
-                  Récapitulatif
-                </h2>
-                
-                <div className="relative h-64 rounded-2xl overflow-hidden mb-6">
-                  <Image
-                    src={passImage}
-                    alt={passName}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-
-                <div className="space-y-4" style={{ color: "var(--platinum)" }}>
-                  <div className="flex justify-between items-center pb-4 border-b" style={{ borderColor: "rgba(229, 228, 226, 0.2)" }}>
-                    <span className="text-lg">Pass sélectionné</span>
-                    <span className="text-xl font-bold gold-text">{passName}</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-4 border-b" style={{ borderColor: "rgba(229, 228, 226, 0.2)" }}>
-                    <span className="text-lg">Prix</span>
-                    <span className="text-2xl font-bold gold-text">{passPrice}</span>
-                  </div>
-                  <div className="pt-4">
-                    <p className="text-sm text-center" style={{ color: "var(--platinum)", opacity: 0.7 }}>
-                      ✓ Accès garanti à l'événement<br/>
-                      ✓ Badge exclusif Genesis<br/>
-                      ✓ QR Code unique
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Side - Payment Form */}
-          <div className="order-1 lg:order-2 animate-slide-in-right">
-            <div className="rounded-3xl overflow-hidden elegant-border bg-gradient-to-b from-[var(--cosmic-blue)]/90 to-[var(--space-dark)]/70 backdrop-blur-sm p-8">
-              <h2 
-                className="text-4xl font-bold mb-8 gold-text text-center"
-                style={{ fontFamily: "var(--font-playfair), serif" }}
-              >
-                Finaliser la réservation
-              </h2>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Personal Information */}
-                <div className="space-y-4">
-                  <h3 className="text-xl font-semibold mb-4" style={{ color: "var(--platinum)", opacity: 0.9 }}>Informations personnelles</h3>
-                  
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: "var(--platinum)", opacity: 0.5 }} />
-                    <input
-                      type="text"
-                      placeholder="Nom complet"
-                      value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                      className="w-full pl-12 pr-4 py-4 rounded-xl focus:outline-none transition-all"
-                      style={{ backgroundColor: "rgba(15, 20, 25, 0.5)", border: "2px solid rgba(229, 228, 226, 0.2)", color: "var(--platinum)" }}
-                      required
-                    />
-                  </div>
-
-                  <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5" style={{ color: "var(--platinum)", opacity: 0.5 }} />
-                    <input
-                      type="tel"
-                      placeholder="Numéro de téléphone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full pl-12 pr-4 py-4 rounded-xl focus:outline-none transition-all"
-                      style={{ backgroundColor: "rgba(15, 20, 25, 0.5)", border: "2px solid rgba(229, 228, 226, 0.2)", color: "var(--platinum)" }}
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Payment Method Selection */}
-                <div className="space-y-4">
-                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--platinum)", opacity: 0.9 }}>
-                    <CreditCard className="w-5 h-5" />
-                    Méthode de paiement
-                  </h3>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Orange Money */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOperator("orange")}
-                      className={`relative p-6 rounded-2xl border-3 transition-all duration-300 ${
-                        selectedOperator === "orange"
-                          ? "border-[#ff6600] bg-[#ff6600]/20 shadow-lg shadow-[#ff6600]/50 scale-105"
-                          : "bg-black/30 hover:border-[#ff6600]/50"
-                      }`}
-                      style={{ borderColor: selectedOperator === "orange" ? "#ff6600" : "rgba(229, 228, 226, 0.2)" }}
-                    >
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center">
-                          <span className="text-3xl font-bold" style={{ color: "#ff6600" }}>OM</span>
-                        </div>
-                        <span className="font-semibold" style={{ color: "var(--platinum)" }}>Orange Money</span>
-                      </div>
-                      {selectedOperator === "orange" && (
-                        <div className="absolute top-2 right-2 w-6 h-6 bg-[#ff6600] rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs">✓</span>
-                        </div>
-                      )}
-                    </button>
-
-                    {/* MTN Mobile Money */}
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOperator("mtn")}
-                      className={`relative p-6 rounded-2xl border-3 transition-all duration-300 ${
-                        selectedOperator === "mtn"
-                          ? "border-[#ffcc00] bg-[#ffcc00]/20 shadow-lg shadow-[#ffcc00]/50 scale-105"
-                          : "bg-black/30 hover:border-[#ffcc00]/50"
-                      }`}
-                      style={{ borderColor: selectedOperator === "mtn" ? "#ffcc00" : "rgba(229, 228, 226, 0.2)" }}
-                    >
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-16 h-16 bg-[#ffcc00] rounded-xl flex items-center justify-center">
-                          <span className="text-2xl font-bold text-black">MTN</span>
-                        </div>
-                        <span className="font-semibold" style={{ color: "var(--platinum)" }}>MTN MoMo</span>
-                      </div>
-                      {selectedOperator === "mtn" && (
-                        <div className="absolute top-2 right-2 w-6 h-6 bg-[#ffcc00] rounded-full flex items-center justify-center">
-                          <span className="text-black text-xs">✓</span>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={!selectedOperator}
-                  className={`w-full py-5 rounded-full font-bold text-lg transition-all duration-300 ${
-                    selectedOperator
-                      ? "bg-gradient-to-r from-[var(--cosmic-blue)] to-[var(--deep-purple)] hover:shadow-2xl hover:shadow-[var(--neon-purple)]/50 transform hover:scale-105"
-                      : "bg-gray-700 cursor-not-allowed"
-                  }`}
-                  style={selectedOperator ? { color: "var(--platinum)" } : { color: "#9ca3af" }}
-                >
-                  {selectedOperator ? "Procéder au paiement" : "Sélectionnez un opérateur"}
-                </button>
-
-                <p className="text-center text-sm" style={{ color: "var(--platinum)", opacity: 0.6 }}>
-                  En continuant, vous acceptez nos conditions d&apos;utilisation
-                </p>
-              </form>
-            </div>
-          </div>
+    <div className="w-full max-w-md mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Full Name Input */}
+        <div className="space-y-2">
+          <Label htmlFor="fullName" className="text-white">
+            Nom Complet <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="fullName"
+            name="fullName"
+            type="text"
+            placeholder="Jean Dupont"
+            value={formData.fullName}
+            onChange={handleInputChange}
+            className={`bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 ${
+              errors.fullName ? "border-red-500" : ""
+            }`}
+            disabled={isLoading}
+            required
+          />
+          {errors.fullName && (
+            <p className="text-red-500 text-sm">{errors.fullName}</p>
+          )}
         </div>
-      </div>
 
-      {/* Loading Animation Overlay */}
-      {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm" style={{ backgroundColor: "rgba(15, 20, 25, 0.95)" }}>
-          <div className="text-center">
-            {/* Animated Logo */}
-            <div className="relative mb-8">
-              <div className="relative w-48 h-48 mx-auto">
-                {/* Pulsing outer ring */}
-                <div className="absolute inset-0 rounded-full animate-ping opacity-75" style={{ border: "4px solid var(--neon-purple)" }}></div>
-                
-                {/* Rotating ring */}
-                <div className="absolute inset-4 rounded-full border-4 border-transparent animate-spin" style={{ borderTopColor: "var(--neon-purple)", borderBottomColor: "var(--deep-purple)" }}></div>
-                
-                {/* Inner glow circle */}
-                <div className="absolute inset-8 rounded-full bg-gradient-to-br animate-pulse" style={{ backgroundImage: "linear-gradient(to bottom right, rgba(192, 132, 252, 0.3), rgba(74, 144, 226, 0.3))" }}></div>
-                
-                {/* Center logo text */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-4xl font-bold gold-text mb-2" style={{ fontFamily: "var(--font-playfair), serif" }}>
-                      Genesis
-                    </div>
-                    <div className="flex gap-1 justify-center">
-                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: "var(--neon-purple)", animationDelay: "0ms" }}></div>
-                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: "var(--neon-purple)", animationDelay: "150ms" }}></div>
-                      <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: "var(--neon-purple)", animationDelay: "300ms" }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* Phone Number Input */}
+        <div className="space-y-2">
+          <Label htmlFor="phone" className="text-white">
+            Numéro de Téléphone <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="phone"
+            name="phone"
+            type="tel"
+            placeholder="+237 6XX XXX XXX"
+            value={formData.phone}
+            onChange={handleInputChange}
+            className={`bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 ${
+              errors.phone ? "border-red-500" : ""
+            }`}
+            disabled={isLoading}
+            required
+          />
+          {errors.phone && (
+            <p className="text-red-500 text-sm">{errors.phone}</p>
+          )}
+        </div>
 
-            {/* Loading text */}
-            <h2 
-              className="text-3xl font-bold gold-text mb-4 animate-pulse"
-              style={{ fontFamily: "var(--font-playfair), serif" }}
+        {/* Payment Operator Selection */}
+        <div className="space-y-3">
+          <Label className="text-white">
+            Mode de Paiement <span className="text-red-500">*</span>
+          </Label>
+          
+          <div className="grid grid-cols-2 gap-3">
+            {/* Orange Money */}
+            <Card
+              className={`cursor-pointer transition-all ${
+                selectedOperator === "orange"
+                  ? "border-2 border-orange-500 bg-orange-500/10"
+                  : "border-gray-700 hover:border-orange-500/50 bg-gray-800"
+              } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+              onClick={() => !isLoading && handleOperatorSelect("orange")}
             >
-              Traitement en cours...
-            </h2>
-            <p className="text-lg" style={{ color: "var(--platinum)", opacity: 0.7 }}>
-              Connexion avec {selectedOperator === "orange" ? "Orange Money" : "MTN MoMo"}
-            </p>
-            
-            {/* Animated sparkles */}
-            <div className="flex justify-center gap-4 mt-8">
-              <div className="animate-pulse" style={{ color: "var(--neon-purple)", animationDelay: "0ms" }}>✨</div>
-              <div className="animate-pulse" style={{ color: "var(--neon-purple)", animationDelay: "200ms" }}>✨</div>
-              <div className="animate-pulse" style={{ color: "var(--neon-purple)", animationDelay: "400ms" }}>✨</div>
-            </div>
+              <CardContent className="p-4 text-center">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center">
+                    <CreditCard className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-white font-semibold">Orange Money</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* MTN MoMo */}
+            <Card
+              className={`cursor-pointer transition-all ${
+                selectedOperator === "mtn"
+                  ? "border-2 border-yellow-500 bg-yellow-500/10"
+                  : "border-gray-700 hover:border-yellow-500/50 bg-gray-800"
+              } ${isLoading ? "opacity-50 cursor-not-allowed" : ""}`}
+              onClick={() => !isLoading && handleOperatorSelect("mtn")}
+            >
+              <CardContent className="p-4 text-center">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center">
+                    <CreditCard className="w-6 h-6 text-black" />
+                  </div>
+                  <span className="text-white font-semibold">MTN MoMo</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {errors.operator && (
+            <p className="text-red-500 text-sm">{errors.operator}</p>
+          )}
+        </div>
+
+        {/* Price Display */}
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400">Montant Total:</span>
+            <span className="text-2xl font-bold text-[#FFD700]">{passPrice}</span>
           </div>
         </div>
-      )}
+
+        {/* Submit Button */}
+        <Button
+          type="submit"
+          className="w-full bg-[#FF0000] hover:bg-red-700 text-white text-lg py-6"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              Traitement en cours...
+            </>
+          ) : (
+            <>
+              <CreditCard className="mr-2 h-5 w-5" />
+              Procéder au Paiement
+            </>
+          )}
+        </Button>
+
+        {/* Security Notice */}
+        <p className="text-xs text-gray-500 text-center">
+          🔒 Paiement sécurisé. Vos informations sont protégées.
+        </p>
+      </form>
     </div>
   )
 }
